@@ -17,22 +17,38 @@ export default function AdminLogin() {
     setIsLoading(true);
     setError('');
 
-    // Simple authentication check
-    if (username === 'healingadmin' && password === 'adminhealing') {
-      // Set authentication in localStorage
-      localStorage.setItem('isAdminAuthenticated', 'true');
-      localStorage.setItem('adminLoginTime', Date.now().toString());
-      
-      // Show success state
-      setIsSuccess(true);
-      
-      // Show success state briefly before redirect
-      setTimeout(() => {
+    try {
+      // Points to the new backend API
+      const response = await fetch('http://localhost:5000/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Set authentication in localStorage
+        localStorage.setItem('isAdminAuthenticated', 'true');
+        localStorage.setItem('adminLoginTime', Date.now().toString());
+        localStorage.setItem('adminUsername', data.username);
+        
+        // Show success state
+        setIsSuccess(true);
+        
         // Redirect to dashboard
-        window.location.href = '/admin';
-      }, 1000);
-    } else {
-      setError('Invalid username or password');
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 1000);
+      } else {
+        setError(data.message || 'Invalid username or password');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Connection to server failed. Make sure backend is running.');
       setIsLoading(false);
     }
   };

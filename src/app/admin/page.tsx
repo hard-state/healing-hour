@@ -60,6 +60,15 @@ export default function AdminDashboard() {
     name?: string;
   }>({ show: false, type: 'team' });
   
+  // Security state
+  const [securityData, setSecurityData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [securityStatus, setSecurityStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  
   // Contacts/Messages state
   const [contacts, setContacts] = useState<any[]>([]);
   const [isDeletingContact, setIsDeletingContact] = useState(false);
@@ -209,12 +218,18 @@ export default function AdminDashboard() {
 
   const fetchContacts = async () => {
     try {
-      // Points to the new backend API we just set up
-      const response = await fetch('https://dmtart.pro/healthy/api/contact');
+      // Try local server first, then fallback
+      const response = await fetch('http://localhost:5000/api/contact');
       const data = await response.json();
-      setContacts(data);
+      if (Array.isArray(data)) {
+        setContacts(data);
+      } else {
+        setContacts([]);
+        console.error('Data received is not an array:', data);
+      }
     } catch (error) {
       console.error('Error fetching contacts:', error);
+      setContacts([]);
     }
   };
 
@@ -296,6 +311,40 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (securityData.newPassword !== securityData.confirmPassword) {
+      setSecurityStatus({ type: 'error', message: 'New passwords do not match' });
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    setSecurityStatus({ type: null, message: '' });
+
+    try {
+      const response = await fetch('http://localhost:5000/api/admin/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: securityData.currentPassword,
+          newPassword: securityData.newPassword
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSecurityStatus({ type: 'success', message: 'Password updated successfully!' });
+        setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } else {
+        setSecurityStatus({ type: 'error', message: data.message || 'Update failed' });
+      }
+    } catch (error) {
+      setSecurityStatus({ type: 'error', message: 'Connection error' });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <AdminAuth>
       <div className="min-h-screen bg-gradient-to-br mt-12 from-warm-cream via-amber-50 to-yellow-50">
@@ -325,7 +374,7 @@ export default function AdminDashboard() {
       <div className="bg-white shadow-sm border-b border-soft-gold/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap gap-2 py-4">
-            {['team', 'hero', 'services', 'pricing', 'location', 'contacts'].map((tab) => (
+            {['team', 'hero', 'services', 'pricing', 'location', 'contacts', 'security'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -648,6 +697,8 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
         {activeTab === 'contacts' && (
           <div>
             <div className="flex justify-between items-center mb-6">
@@ -673,14 +724,14 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-soft-gold/10">
-                    {contacts.length === 0 ? (
+                    {!Array.isArray(contacts) || contacts.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-12 text-center text-charcoal italic">
-                          No messages received yet.
+                          No messages received yet or error loading data.
                         </td>
                       </tr>
                     ) : (
-                      contacts.map((contact) => (
+                      contacts.map((contact: any) => (
                         <tr key={contact._id} className="hover:bg-amber-50/30 transition-colors">
                           <td className="px-6 py-4">
                             <p className="text-xs text-gray-400">{new Date(contact.createdAt || Date.now()).toLocaleDateString()}</p>
@@ -721,6 +772,72 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="max-w-2xl mx-auto">
+            <div className="mb-8">
+              <h2 className="text-3xl font-elegant font-bold text-matte-black mb-2">Account Security</h2>
+              <p className="text-charcoal uppercase tracking-wider text-sm">Update your administrator credentials</p>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-soft-gold/20">
+              <form onSubmit={handleUpdatePassword} className="space-y-6">
+                <div>
+                  <label className="block text-sm font-bold text-matte-black mb-2 uppercase tracking-tight">Current Password</label>
+                  <input
+                    type="password"
+                    value={securityData.currentPassword}
+                    onChange={(e) => setSecurityData({ ...securityData, currentPassword: e.target.value })}
+                    className="w-full px-4 py-3 border border-soft-gold/30 rounded-xl focus:ring-2 focus:ring-soft-gold/50 focus:border-soft-gold transition-all bg-white/50"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-matte-black mb-2 uppercase tracking-tight">New Password</label>
+                    <input
+                      type="password"
+                      value={securityData.newPassword}
+                      onChange={(e) => setSecurityData({ ...securityData, newPassword: e.target.value })}
+                      className="w-full px-4 py-3 border border-soft-gold/30 rounded-xl focus:ring-2 focus:ring-soft-gold/50 focus:border-soft-gold transition-all bg-white/50"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-matte-black mb-2 uppercase tracking-tight">Confirm Password</label>
+                    <input
+                      type="password"
+                      value={securityData.confirmPassword}
+                      onChange={(e) => setSecurityData({ ...securityData, confirmPassword: e.target.value })}
+                      className="w-full px-4 py-3 border border-soft-gold/30 rounded-xl focus:ring-2 focus:ring-soft-gold/50 focus:border-soft-gold transition-all bg-white/50"
+                      placeholder="••••••••"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {securityStatus.type && (
+                  <div className={`p-4 rounded-xl text-sm font-semibold ${
+                    securityStatus.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}>
+                    {securityStatus.message}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isUpdatingPassword}
+                  className="w-full py-4 bg-gradient-to-r from-soft-gold to-yellow-400 text-matte-black font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50"
+                >
+                  {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
+                </button>
+              </form>
             </div>
           </div>
         )}
